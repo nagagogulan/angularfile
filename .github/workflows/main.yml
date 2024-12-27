@@ -1,4 +1,4 @@
-name: Deploy Application
+name: Build and Deploy Application with Docker
 
 on:
   push:
@@ -6,8 +6,8 @@ on:
       - main # Run the workflow on pushes to the 'main' branch
 
 jobs:
-  deploy:
-    name: Deploy to EC2
+  build-and-deploy:
+    name: Build and Deploy Docker Image
     runs-on: ubuntu-latest
 
     steps:
@@ -15,7 +15,32 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # Step 2: Set up SSH for EC2 connection
+      # Step 2: Log in to Docker Hub
+      - name: Log in to Docker Hub
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+          echo "Docker login successful."
+
+      # Step 3: Build Docker Image
+      - name: Build Docker Image
+        env:
+          IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+        run: |
+          docker build -t $IMAGE_NAME:latest .
+          echo "Docker image built: $IMAGE_NAME:latest"
+
+      # Step 4: Push Docker Image to Docker Hub
+      - name: Push Docker Image
+        env:
+          IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+        run: |
+          docker push $IMAGE_NAME:latest
+          echo "Docker image pushed to Docker Hub: $IMAGE_NAME:latest"
+
+      # Step 5: Set up SSH for EC2 connection
       - name: Set up SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -24,12 +49,6 @@ jobs:
         run: |
           echo "Setting up SSH..."
           
-          # Check if required secrets are set
-          if [ -z "$SSH_PRIVATE_KEY" ] || [ -z "$SSH_HOST" ] || [ -z "$SSH_USERNAME" ]; then
-            echo "Error: Missing SSH environment variables. Please set SSH_PRIVATE_KEY, SSH_HOST, and SSH_USERNAME."
-            exit 1
-          fi
-
           # Configure SSH
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
@@ -37,35 +56,21 @@ jobs:
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
           echo "SSH setup completed."
 
-      # Step 3: Build the application
-      - name: Build Application
-        run: |
-          echo "Building application..."
-          mkdir -p dist
-          echo "<html><body><h1>Deployed Successfully</h1></body></html>" > dist/index.html
-          echo "Build completed."
-
-      # Step 4: Deploy to EC2 instance
-      - name: Deploy to EC2
+      # Step 6: Deploy Docker Image on EC2
+      - name: Deploy Docker Image
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
-          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
         run: |
-          echo "Deploying application to EC2..."
+          echo "Deploying Docker container on EC2..."
           
-          # Check if required secrets are set
-          if [ -z "$SSH_HOST" ] || [ -z "$SSH_USERNAME" ] || [ -z "$DEPLOY_DIR" ]; then
-            echo "Error: Missing deployment environment variables. Please set SSH_HOST, SSH_USERNAME, and DEPLOY_DIR."
-            exit 1
-          fi
-
-          # Transfer files to EC2
-          scp -o StrictHostKeyChecking=no -r dist/* $SSH_USERNAME@$SSH_HOST:$DEPLOY_DIR
-          
-          # Restart Nginx on EC2
+          # SSH into EC2 and update Docker container
           ssh -o StrictHostKeyChecking=no $SSH_USERNAME@$SSH_HOST << EOF
             echo "Connected to EC2"
-            sudo systemctl restart nginx
-            echo "Deployment completed successfully."
+            docker pull $IMAGE_NAME:latest
+            docker stop app-container || true
+            docker rm app-container || true
+            docker run -d --name app-container -p 80:80 $IMAGE_NAME:latest
+            echo "Docker container deployed successfully."
           EOF
