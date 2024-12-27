@@ -27,7 +27,7 @@ jobs:
       # Step 3: Build Docker Image
       - name: Build Docker Image
         env:
-          IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+          IMAGE_NAME: ${{ secrets.IMAGE_NAME }}  # Use IMAGE_NAME stored in GitHub Secrets
         run: |
           docker build -t $IMAGE_NAME:latest .
           echo "Docker image built: $IMAGE_NAME:latest"
@@ -61,7 +61,7 @@ jobs:
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
-          IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+          IMAGE_NAME: ${{ secrets.IMAGE_NAME }}  # Use IMAGE_NAME stored in GitHub Secrets
         run: |
           echo "Deploying Docker container on EC2..."
           
