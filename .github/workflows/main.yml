@@ -3,7 +3,7 @@ name: Build and Deploy Application with Docker
 on:
   push:
     branches:
-      - main # Run the workflow on pushes to the 'main' branch
+      - main  # Run the workflow on pushes to the 'main' branch
 
 jobs:
   build-and-deploy:
@@ -57,7 +57,7 @@ jobs:
           echo "SSH setup completed."
 
       # Step 6: Deploy Docker Image on EC2
-      - name: Deploy Docker Image
+      - name: Deploy Docker Image on EC2
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
@@ -68,9 +68,15 @@ jobs:
           # SSH into EC2 and update Docker container
           ssh -o StrictHostKeyChecking=no $SSH_USERNAME@$SSH_HOST << EOF
             echo "Connected to EC2"
+            
+            # Pull the latest Docker image
             docker pull $IMAGE_NAME:latest
+
+            # Stop and remove the existing container (if any)
             docker stop app-container || true
             docker rm app-container || true
+
+            # Run the new container with the latest image
             docker run -d --name app-container -p 80:80 $IMAGE_NAME:latest
             echo "Docker container deployed successfully."
           EOF
