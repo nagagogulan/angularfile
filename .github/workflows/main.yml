@@ -1,0 +1,59 @@
+name: Deploy Application
+
+on:
+  push:
+    branches:
+      - main # Run the workflow on pushes to the 'main' branch
+
+jobs:
+  deploy:
+    name: Deploy to Remote Server
+    runs-on: ubuntu-latest
+
+    env:
+      SSH_HOST: "143.110.251.96" # Replace with your server's IP or hostname
+      SSH_PORT: "22" # SSH port
+      SSH_USERNAME: "ubuntu" # Replace with your SSH username
+      DEPLOY_DIR: "/var/www/html/project" # Deployment directory
+
+    steps:
+      # Checkout the repository
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # Set up SSH
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          echo "Setting up SSH..."
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p $SSH_PORT $SSH_HOST >> ~/.ssh/known_hosts || { echo "ssh-keyscan failed"; exit 1; }
+          echo "SSH setup completed."
+
+      # Build the application
+      - name: Build Application
+        run: |
+          echo "Building the application..."
+          mkdir -p dist
+          echo "<html><body><h1>Deployed Successfully</h1></body></html>" > dist/index.html
+          echo "Build process completed."
+          ls -l dist
+
+      # Deploy the application
+      - name: Deploy Application
+        run: |
+          echo "Starting deployment..."
+          echo "Transferring files to ${SSH_USERNAME}@${SSH_HOST}:${DEPLOY_DIR}"
+          scp -r -P $SSH_PORT dist/* "${SSH_USERNAME}@${SSH_HOST}:${DEPLOY_DIR}" || { echo "SCP failed"; exit 1; }
+          echo "Connecting to ${SSH_USERNAME}@${SSH_HOST}"
+          ssh -p $SSH_PORT "${SSH_USERNAME}@${SSH_HOST}" << EOF
+            set -e
+            echo "Connected to ${SSH_HOST}"
+            mkdir -p ${DEPLOY_DIR}
+            cd ${DEPLOY_DIR}
+            echo "Deployment successful."
+          EOF
+          echo "Deployment completed."
