@@ -23,6 +23,14 @@ jobs:
           SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
         run: |
           echo "Setting up SSH..."
+          
+          # Check if required secrets are set
+          if [ -z "$SSH_PRIVATE_KEY" ] || [ -z "$SSH_HOST" ] || [ -z "$SSH_USERNAME" ]; then
+            echo "Error: Missing SSH environment variables. Please set SSH_PRIVATE_KEY, SSH_HOST, and SSH_USERNAME."
+            exit 1
+          fi
+
+          # Configure SSH
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
@@ -40,10 +48,22 @@ jobs:
       # Step 4: Deploy to EC2 instance
       - name: Deploy to EC2
         env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
         run: |
           echo "Deploying application to EC2..."
+          
+          # Check if required secrets are set
+          if [ -z "$SSH_HOST" ] || [ -z "$SSH_USERNAME" ] || [ -z "$DEPLOY_DIR" ]; then
+            echo "Error: Missing deployment environment variables. Please set SSH_HOST, SSH_USERNAME, and DEPLOY_DIR."
+            exit 1
+          fi
+
+          # Transfer files to EC2
           scp -o StrictHostKeyChecking=no -r dist/* $SSH_USERNAME@$SSH_HOST:$DEPLOY_DIR
+          
+          # Restart Nginx on EC2
           ssh -o StrictHostKeyChecking=no $SSH_USERNAME@$SSH_HOST << EOF
             echo "Connected to EC2"
             sudo systemctl restart nginx
